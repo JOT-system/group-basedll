@@ -1,0 +1,649 @@
+﻿Imports System.Data.SqlClient
+Imports System.Data.OleDb
+
+Module CB00005TBLselect
+
+    '■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+    '■　コマンド例.CB00005TBLselect /@1 /@2 /@3 /@4 /@5 /@6　　　　　　　　　　　　　 　　　■
+    '■　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　■
+    '■　パラメータ説明　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　■
+    '■　　・@1：テーブル記号名称　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　■
+    '■　　・@2：出力先(ディレクトリ+ファイル名)　※省略時、 SENDSTORディレクトリとする  　　■
+    '■　　・@3：出力先ディレクトリ無し時、ディレクトリ作成する　※Yまたは任意　 　　　　　　■
+    '■　　・@4：更新日以降で抽出(任意)　　　　　　　　　　　　　　　　　　　　　　　　　　　■
+    '■　　・@5：出力レコードヘッダ有無(Y/N) 　　　　　　　　　　　　　　　　　　　　　　　　■
+    '■　　・@6：全件抽出(Y/N)               　　　　　　　　　　　　　　　　　　　　　　　　■
+    '■　　                                  　　　　　　　　　　　　　　　　　　　　　　　　■
+    '■　　※@4：更新日以降で抽出の指定がなければ、配信日時テーブル（前回配信日）以降  　　　■
+    '■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+    Dim WW_SRVname As String = ""
+    Dim WW_DBcon As String = ""
+    Dim WW_LOGdir As String = ""
+    Dim WW_Now As Date = Date.Now
+
+    Sub Main()
+
+        Dim WW_cmds_cnt As Integer = 0
+        Dim WW_InPARA_TBLNAME As String = ""
+        Dim WW_InPARA_DIR As String = ""
+        Dim WW_InPARA_DIR_make As String = ""
+        Dim WW_InPARA_HEAD_make As String = ""
+        Dim WW_InPARA_ALLSEL As String = ""
+        Dim WW_InPARA_SelectYMD As Date
+        Dim WW_InPARA_SelectYMDs As String = ""
+        Dim WW_SelectYMD_set As String = "OFF"
+
+        '■■■　共通宣言　■■■
+        '*共通関数宣言(BATDLL)
+        Dim CS0050DBcon_bat As New BATDLL.BATDLL.CS0050DBcon_bat          'DataBase接続文字取得
+        Dim CS0051APSRVname_bat As New BATDLL.BATDLL.CS0051APSRVname_bat  'APサーバ名称取得
+        Dim CS0052LOGdir_bat As New BATDLL.BATDLL.CS0052LOGdir_bat        'ログ格納ディレクトリ取得
+        Dim CS0053FILEdir_bat As New BATDLL.BATDLL.CS0053FILEdir_bat      'アップロードFile格納ディレクトリ取得
+        Dim CS0054LOGWrite_bat As New BATDLL.BATDLL.CS0054LOGWrite_bat    'LogOutput DirString Get
+        Dim CS0056GetSelTerm_bat As BATDLL.BATDLL.CS0056GetSelTerm_bat    'データ抽出端末ID取得
+
+        '■■■　コマンドライン引数の取得　■■■
+        'コマンドライン引数を配列取得
+        Dim cmds As String() = System.Environment.GetCommandLineArgs()
+
+        For Each cmd As String In cmds
+            Select Case WW_cmds_cnt
+                Case 1     'テーブル記号名称
+                    WW_InPARA_TBLNAME = Mid(cmd, 2, 100)
+                    Console.WriteLine("引数(テーブル名　　　)：" & WW_InPARA_TBLNAME)
+                Case 2     '出力先(ディレクトリ+ファイル名)
+                    WW_InPARA_DIR = Mid(cmd, 2, 100)
+                    Console.WriteLine("引数(出力先　　　　　)：" & WW_InPARA_DIR)
+                Case 3     '出力先ディレクトリ無し時、ディレクトリ作成する Y
+                    WW_InPARA_DIR_make = Mid(cmd, 2, 100)
+                    Console.WriteLine("引数(ディレクトリ作成)：" & WW_InPARA_DIR_make)
+                Case 4     '更新日以降で抽出
+                    If Mid(cmd, 2, 100) = "" Then
+                        WW_SelectYMD_set = "OFF"
+                        WW_InPARA_SelectYMDs = ""
+                        Console.WriteLine("引数(日付　　　　　　)：" & WW_InPARA_SelectYMDs)
+                    Else
+                        WW_SelectYMD_set = "ON"
+                        WW_InPARA_SelectYMDs = Mid(cmd, 2, 100)
+                        Console.WriteLine("引数(日付　　　　　　)：" & WW_InPARA_SelectYMDs)
+                        If Date.TryParse(WW_InPARA_SelectYMDs, WW_InPARA_SelectYMD) Then
+                        Else
+                            CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+                            CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+                            CS0054LOGWrite_bat.INFSUBCLASS = "Main"                         'SUBクラス名
+                            CS0054LOGWrite_bat.INFPOSI = "引数4チェック"                    '
+                            CS0054LOGWrite_bat.NIWEA = "E"                                  '
+                            CS0054LOGWrite_bat.TEXT = "日付形式で指定してください。" & cmd
+                            CS0054LOGWrite_bat.MESSAGENO = "00002"                          'パラメータエラー
+                            CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+                            Environment.Exit(100)
+                        End If
+                    End If
+                Case 5     'ヘッダー出力
+                    WW_InPARA_HEAD_make = Mid(cmd, 2, 100)
+                    Console.WriteLine("引数(ヘッダー出力　　)：" & WW_InPARA_HEAD_make)
+                Case 6     'ヘッダー出力
+                    WW_InPARA_ALLSEL = Mid(cmd, 2, 100)
+                    Console.WriteLine("引数(全件抽出　　　　)：" & WW_InPARA_ALLSEL)
+            End Select
+
+            WW_cmds_cnt = WW_cmds_cnt + 1
+        Next
+
+        '■■■　開始メッセージ　■■■
+        CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+        CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+        CS0054LOGWrite_bat.INFSUBCLASS = "Main"                         'SUBクラス名
+        CS0054LOGWrite_bat.INFPOSI = "CB00005TBLselect処理開始"                    '
+        CS0054LOGWrite_bat.NIWEA = "I"                                  '
+        CS0054LOGWrite_bat.TEXT = "CB00005TBLselect.exe /" & WW_InPARA_TBLNAME & " /" & WW_InPARA_DIR & " /" & WW_InPARA_DIR_make & " /" & WW_InPARA_SelectYMDs & " /" & WW_InPARA_HEAD_make & " "
+        CS0054LOGWrite_bat.MESSAGENO = "00000"                          'DBエラー
+        CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+
+        '■■■　共通処理　■■■
+        '○ APサーバー名称取得(InParm無し)
+        CS0051APSRVname_bat.CS0051APSRVname_bat()
+        If CS0051APSRVname_bat.ERR = "00000" Then
+            WW_SRVname = Trim(CS0051APSRVname_bat.APSRVname)              'サーバー名格納
+        Else
+            CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+            CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+            CS0054LOGWrite_bat.INFSUBCLASS = "CS0051APSRVname_bat"          'SUBクラス名
+            CS0054LOGWrite_bat.INFPOSI = "APサーバー名称取得"
+            CS0054LOGWrite_bat.NIWEA = "E"
+            CS0054LOGWrite_bat.TEXT = "APサーバー名称取得に失敗（INIファイル設定不備）"
+            CS0054LOGWrite_bat.MESSAGENO = CS0051APSRVname_bat.ERR
+            CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+            Environment.Exit(100)
+        End If
+
+        '○ DB接続文字取得(InParm無し)
+        CS0050DBcon_bat.CS0050DBcon_bat()
+        If CS0050DBcon_bat.ERR = "00000" Then
+            WW_DBcon = Trim(CS0050DBcon_bat.DBconStr)                     'DB接続文字格納
+        Else
+            CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+            CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+            CS0054LOGWrite_bat.INFSUBCLASS = "CS0050DBcon_bat"              'SUBクラス名
+            CS0054LOGWrite_bat.INFPOSI = "DB接続文字取得"
+            CS0054LOGWrite_bat.NIWEA = "E"
+            CS0054LOGWrite_bat.TEXT = "DB接続文字取得に失敗（INIファイル設定不備）"
+            CS0054LOGWrite_bat.MESSAGENO = CS0050DBcon_bat.ERR
+            CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+            Environment.Exit(100)
+        End If
+
+        '○ ログ格納ディレクトリ取得(InParm無し)
+        CS0052LOGdir_bat.CS0052LOGdir_bat()
+        If CS0052LOGdir_bat.ERR = "00000" Then
+            WW_LOGdir = Trim(CS0052LOGdir_bat.LOGdirStr)                  'ログ格納ディレクトリ格納
+        Else
+            CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+            CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+            CS0054LOGWrite_bat.INFSUBCLASS = "CS0052LOGdir_bat"             'SUBクラス名
+            CS0054LOGWrite_bat.INFPOSI = "ログ格納ディレクトリ取得"
+            CS0054LOGWrite_bat.NIWEA = "E"
+            CS0054LOGWrite_bat.TEXT = "ログ格納ディレクトリ取得に失敗（INIファイル設定不備）"
+            CS0054LOGWrite_bat.MESSAGENO = CS0052LOGdir_bat.ERR
+            CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+            Environment.Exit(100)
+        End If
+
+        '○ File格納ディレクトリ取得(InParm無し)
+        Dim WW_FILEdir As String = ""
+        CS0053FILEdir_bat.CS0053FILEdir_bat()
+        If CS0053FILEdir_bat.ERR = "00000" Then
+            WW_FILEdir = Trim(CS0053FILEdir_bat.FILEdirStr)               'アップロードFile格納
+        Else
+            CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+            CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+            CS0054LOGWrite_bat.INFSUBCLASS = "CS0052LOGdir_bat"             'SUBクラス名
+            CS0054LOGWrite_bat.INFPOSI = "File格納ディレクトリ取得"
+            CS0054LOGWrite_bat.NIWEA = "E"
+            CS0054LOGWrite_bat.TEXT = "File格納ディレクトリ取得に失敗（INIファイル設定不備）"
+            CS0054LOGWrite_bat.MESSAGENO = CS0053FILEdir_bat.ERR
+            CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+            Environment.Exit(100)
+        End If
+
+
+        '■■■　コマンドライン第一引数(テーブル)のチェック　■■■
+        '○ パラメータチェック(テーブル名)　　…　SQL Server定義を参照
+        'カラム名、データ型退避用ワーク定義
+        Dim WW_DB_Field As List(Of String)
+        Dim WW_DB_Type As List(Of String)
+        WW_DB_Field = New List(Of String)
+        WW_DB_Type = New List(Of String)
+
+        Dim WW_SENDTBLARRY As List(Of String)
+        Dim WW_SELTERMARRY As List(Of String)
+        WW_SENDTBLARRY = New List(Of String)
+        WW_SELTERMARRY = New List(Of String)
+
+        '■■■　コマンドライン第二引数(出力先)のチェック　■■■
+        'ディレクトリ指定無しの場合、デフォルト(c:\APPL\APPLFILES\SEND\SENDSTOR\)設定
+        If WW_InPARA_DIR = "" Then
+            WW_InPARA_DIR = WW_FILEdir & "\SEND\SENDSTOR\"
+        End If
+        '末尾に\を付加する
+        If WW_InPARA_DIR.LastIndexOf("\") <> WW_InPARA_DIR.Length - 1 Then
+            WW_InPARA_DIR = WW_InPARA_DIR & "\"
+        End If
+
+        'コマンドライン第二引数(出力先)のチェック  …　自SRVディレクトリのみ可(\\xxxx形式は×)
+        If InStr(WW_InPARA_DIR, ":") = 0 Or Mid(WW_InPARA_DIR, 2, 1) <> ":" Then
+            CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+            CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+            CS0054LOGWrite_bat.INFSUBCLASS = "Main"                         'SUBクラス名
+            CS0054LOGWrite_bat.INFPOSI = "引数2チェック"                    '
+            CS0054LOGWrite_bat.NIWEA = "E"                                  '
+            CS0054LOGWrite_bat.TEXT = "引数2フォーマットエラー：" & WW_InPARA_DIR
+            CS0054LOGWrite_bat.MESSAGENO = "00001"                          'DBエラー
+            CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+            Environment.Exit(100)
+        End If
+
+        'コマンドライン第二引数(出力先)のチェック＆ディレクトリ作成
+        Dim WW_POSI As Integer = 3
+        Dim WW_DIR_work As String = WW_InPARA_DIR                                 '"\"の位置取得用
+        Dim WW_DIR_chk As String = ""                                       '
+        Do
+            WW_DIR_work = Mid(WW_InPARA_DIR, WW_POSI + 1, 500)                     'WW_POSI
+            WW_POSI = WW_POSI + InStr(WW_DIR_work, "\")                     '
+            WW_DIR_chk = Mid(WW_InPARA_DIR, 1, WW_POSI - 1)
+            If System.IO.Directory.Exists(WW_DIR_chk) Then
+            Else
+                If WW_InPARA_DIR_make = "Y" Then
+                    System.IO.Directory.CreateDirectory(WW_DIR_chk)
+                Else
+                    CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+                    CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+                    CS0054LOGWrite_bat.INFSUBCLASS = "Main"                         'SUBクラス名
+                    CS0054LOGWrite_bat.INFPOSI = "引数2チェック"                    '
+                    CS0054LOGWrite_bat.NIWEA = "E"                                  '
+                    CS0054LOGWrite_bat.TEXT = "引数2ディレクトリ無し：" & WW_InPARA_DIR
+                    CS0054LOGWrite_bat.MESSAGENO = "00008"                          'DBエラー
+                    CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+                    Environment.Exit(100)
+                End If
+            End If
+        Loop Until InStr(WW_DIR_work, "\") = 0
+
+        '■■■　データ抽出端末（配信先）一覧を作成　■■■　
+        CS0056GetSelTerm_bat.DBCON = WW_DBcon
+        CS0056GetSelTerm_bat.SRVNAME = WW_SRVname
+        CS0056GetSelTerm_bat.CS0056GetSelTerm_bat()
+        If CS0056GetSelTerm_bat.ERR = "00000" Then
+            WW_SELTERMARRY = CS0056GetSelTerm_bat.SELTERMID
+        Else
+            Environment.Exit(100)
+        End If
+
+        '■■■　配信対象テーブル一覧を作成　■■■
+        WW_SENDTBLARRY.Clear()
+        If WW_InPARA_TBLNAME = "" Then
+            '引数指定なしの場合、配信テーブルマスタよりテーブル一覧を作成
+            GetSendTbl(WW_SENDTBLARRY)
+        Else
+            '引数のテーブル名でテーブル一覧（1件）を作成
+            WW_SENDTBLARRY.Add(WW_InPARA_TBLNAME)
+        End If
+
+        '■■■　前回配信日時を取得　■■■
+        Dim WW_LASTTIME As DateTime = Nothing
+        GetSendYMD(WW_LASTTIME)
+
+        '引数で日付指定されていなければ、配信日時テーブルの前回配信日時を設定する
+        If WW_SelectYMD_set = "OFF" Then
+            WW_InPARA_SelectYMD = WW_LASTTIME
+        End If
+
+        '■■■　端末ID全て処理する　■■■
+        For Each WW_SELTERM As String In WW_SELTERMARRY
+
+            '■■■　送信対象テーブル全て処理する　■■■
+            For Each WW_SENDTBL As String In WW_SENDTBLARRY
+                'テーブルのカラム情報（SQL Serverシステムテーブルより）取得
+                GetTblInfo(WW_SENDTBL, WW_DB_Field, WW_DB_Type)
+
+                '■■■　該当テーブル検索　■■■
+                Dim WW_ds As DataSet
+                Dim WW_tbl_row As DataRow '行のロウデータ
+                Dim WW_dataCnt As Integer
+                WW_ds = New DataSet                                      '初期化
+                '初期化
+                WW_ds = New DataSet() '初期化
+                WW_ds.Tables.Add(WW_SENDTBL)
+
+                Try
+                    Dim SQLadp As SqlDataAdapter
+                    '受信年月日更新（データ更新）
+                    Dim SQL_Str As String = ""
+                    Dim SQLcon As New SqlConnection(WW_DBcon)
+                    SQLcon.Open() 'DataBase接続(Open)
+                    If WW_InPARA_ALLSEL = "Y" Then
+                    Else
+                        SQL_Str = _
+                                " UPDATE " & WW_SENDTBL & " " & _
+                                "   SET  RECEIVEYMD = '" & WW_Now & "' " & _
+                                 " WHERE UPDYMD    >= '" & WW_InPARA_SelectYMD & "' " & _
+                                 " AND   UPDTERMID  = '" & WW_SELTERM & "' "
+                    End If
+
+                    Dim SQLcmd As New SqlCommand(SQL_Str, SQLcon)
+
+                    Try
+                        SQLcmd.ExecuteNonQuery()
+                        'Close
+                        SQLcmd.Dispose()
+                        SQLcmd = Nothing
+                    Catch ex As Exception
+                        CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+                        CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+                        CS0054LOGWrite_bat.INFSUBCLASS = "Main"                         'SUBクラス名
+                        CS0054LOGWrite_bat.INFPOSI = WW_SENDTBL & " UPDATE"      '
+                        CS0054LOGWrite_bat.NIWEA = "A"                                  '
+                        CS0054LOGWrite_bat.TEXT = ex.ToString
+                        CS0054LOGWrite_bat.MESSAGENO = "00003"                          'DBエラー
+                        CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ入力
+                        Environment.Exit(100)
+                    End Try
+
+                    '検索SQL文
+                    Dim SQLStr As String = ""
+                    If WW_InPARA_ALLSEL = "Y" Then
+                        SQLStr = _
+                                 "SELECT * FROM " & WW_SENDTBL
+                    Else
+                        SQLStr = _
+                                     "SELECT * FROM " & WW_SENDTBL & _
+                                     " WHERE UPDYMD    >= '" & WW_InPARA_SelectYMD & "' " & _
+                                     " AND   UPDTERMID  = '" & WW_SELTERM & "' "
+                    End If
+                    SQLadp = New SqlDataAdapter(SQLStr, WW_DBcon) 'SQL発行
+
+                    'テーブルへデータ貼り付け
+                    SQLadp.Fill(WW_ds, WW_SENDTBL)
+
+                    '0件の場合、ファイル出力しない
+                    WW_dataCnt = WW_ds.Tables(WW_SENDTBL).Rows.Count
+                    If WW_dataCnt > 0 Then
+                        '端末毎にフォルダーを作成 例 C:\APPL\APPLFILES\SEND\SENDSTOR\端末ID
+                        Dim WW_DIR As String = WW_InPARA_DIR & WW_SELTERM
+                        If System.IO.Directory.Exists(WW_DIR) Then
+                        Else
+                            System.IO.Directory.CreateDirectory(WW_DIR)
+                        End If
+                        '端末フォルダーにTABLEフォルダーを作成 例 C:\APPL\APPLFILES\SEND\SENDSTOR\端末ID\TABLE
+                        WW_DIR = WW_DIR & "\TABLE"
+                        If System.IO.Directory.Exists(WW_DIR) Then
+                        Else
+                            System.IO.Directory.CreateDirectory(WW_DIR)
+                        End If
+                        'TABLEフォルダーに抽出データファイルを出力（テーブル名.dat)
+                        Dim WW_FilePath As String = WW_DIR & "\" & WW_SENDTBL & ".dat"
+
+                        'DAT出力準備
+                        Dim WW_str As String = ""
+                        Dim WW_IOstream As New System.IO.StreamWriter(WW_FilePath, False, System.Text.Encoding.GetEncoding("unicode"))
+
+                        'DATヘッダーデータ出力　…　ヘッダは必ず出力
+                        If WW_InPARA_HEAD_make = "Y" Then
+                            For i As Integer = 0 To WW_ds.Tables(WW_SENDTBL).Columns.Count - 1
+                                WW_str = WW_str & WW_ds.Tables(WW_SENDTBL).Columns(i).ColumnName.ToString
+                                If (WW_ds.Tables(WW_SENDTBL).Columns.Count - 1) = i Then
+                                    WW_str = WW_str & ControlChars.NewLine
+                                Else
+                                    WW_str = WW_str & ControlChars.Tab
+                                End If
+                            Next
+                            WW_IOstream.Write(WW_str)
+                        End If
+
+                        'DATデータ出力
+                        For Each WW_tbl_row In WW_ds.Tables(WW_SENDTBL).Select("")     '順検索指定なし
+                            'DAT編集(ROWデータをDAT変換)
+                            WW_str = ""
+                            Try
+                                For i = 0 To WW_tbl_row.ItemArray.Count - 1
+                                    'タブ区切りでデータを出力
+                                    WW_str = WW_str & WW_tbl_row.ItemArray(i).ToString.Replace(vbCrLf, "\n")
+                                    If (WW_tbl_row.ItemArray.Count - 1) = i Then
+                                        WW_str = WW_str & ControlChars.NewLine
+                                    Else
+                                        WW_str = WW_str & ControlChars.Tab
+                                    End If
+                                Next
+
+                                'DAT Line出力
+                                WW_IOstream.Write(WW_str)
+
+                            Catch ex As System.SystemException
+                                '閉じる
+                                WW_IOstream.Close()
+                                WW_IOstream.Dispose()
+                                Exit Sub
+
+                            End Try
+                        Next
+
+                        '閉じる
+                        WW_IOstream.Close()
+                        WW_IOstream.Dispose()
+
+                        SQLadp.Dispose()
+                        SQLadp = Nothing
+
+                        WW_ds.Dispose()
+                        WW_ds.Clear()
+                        WW_ds = Nothing
+
+                        SQLcon.Close() 'DataBase接続(Close)
+                        SQLcon.Dispose()
+                        SQLcon = Nothing
+
+                        Console.WriteLine("対象(端末名　　　　　)：" & WW_SELTERM)
+                        Console.WriteLine("対象(テーブル名　　　)：" & WW_SENDTBL)
+                        Console.WriteLine("対象(件数　　　　　　)：" & WW_dataCnt)
+
+                    End If
+
+                Catch ex As Exception
+                    CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+                    CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+                    CS0054LOGWrite_bat.INFSUBCLASS = "Main"                         'SUBクラス名
+                    CS0054LOGWrite_bat.INFPOSI = WW_InPARA_TBLNAME & " SELECT & DATA WRITE"
+                    CS0054LOGWrite_bat.NIWEA = "A"                                  '
+                    CS0054LOGWrite_bat.TEXT = ex.ToString
+                    CS0054LOGWrite_bat.MESSAGENO = "00003"                          'DBエラー
+                    CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+                    Environment.Exit(100)
+                End Try
+            Next
+        Next
+
+        '■■■　終了メッセージ　■■■
+        CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+        CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+        CS0054LOGWrite_bat.INFSUBCLASS = "Main"                         'SUBクラス名
+        CS0054LOGWrite_bat.INFPOSI = "CB00005TBLselect処理終了"                    '
+        CS0054LOGWrite_bat.NIWEA = "I"                                  '
+        CS0054LOGWrite_bat.TEXT = "CB00005TBLselect処理終了"
+        CS0054LOGWrite_bat.MESSAGENO = "00000"                          'DBエラー
+        CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+        Environment.Exit(0)
+
+    End Sub
+
+    '-------------------------------------------------------------------------
+    '配信テーブルマスタ取得
+    '  概要
+    '       配信テーブルの一覧（配列）を作成する
+    '
+    '　引数
+    '     　(OUT）oTableID     : テーブルID
+    '-------------------------------------------------------------------------
+    Private Sub GetSendTbl(ByRef oTableID As Object)
+        Dim CS0054LOGWrite_bat As New BATDLL.BATDLL.CS0054LOGWrite_bat    'LogOutput DirString Get
+
+        Try
+            'DataBase接続文字
+            Dim SQLcon As New SqlConnection(WW_DBcon)
+            SQLcon.Open() 'DataBase接続(Open)
+
+            Dim SQL_Str As String = ""
+            '指定された端末IDより振分先を取得
+            SQL_Str = _
+                    " SELECT TBLID " & _
+                    " FROM S0018_SENDTBL " & _
+                    " WHERE DELFLG       <> '1' "
+            Dim SQLcmd As New SqlCommand(SQL_Str, SQLcon)
+            Dim SQLdr As SqlDataReader = SQLcmd.ExecuteReader()
+            oTableID.clear()
+
+            While SQLdr.Read
+                oTableID.add(SQLdr("TBLID"))
+            End While
+            If SQLdr.HasRows = False Then
+                CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"          'NameSpace
+                CS0054LOGWrite_bat.INFCLASS = "Main"                        'クラス名
+                CS0054LOGWrite_bat.INFSUBCLASS = "GetSendTbl"               'SUBクラス名
+                CS0054LOGWrite_bat.INFPOSI = "S0018_SENDTBL SELECT"             '
+                CS0054LOGWrite_bat.NIWEA = "E"                                  '
+                CS0054LOGWrite_bat.TEXT = "配信テーブルマスタにデータが存在しません。"
+                CS0054LOGWrite_bat.MESSAGENO = "00003"                          'パラメータエラー
+                CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+                Environment.Exit(100)
+            End If
+
+            'Close
+            SQLdr.Close() 'Reader(Close)
+            SQLdr = Nothing
+
+            SQLcmd.Dispose()
+            SQLcmd = Nothing
+
+            SQLcon.Close() 'DataBase接続(Close)
+            SQLcon.Dispose()
+            SQLcon = Nothing
+
+        Catch ex As Exception
+            CS0054LOGWrite_bat.INFNMSPACE = "CB00010FileDistribute"         'NameSpace
+            CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+            CS0054LOGWrite_bat.INFSUBCLASS = "GetSendTblInfo"               'SUBクラス名
+            CS0054LOGWrite_bat.INFPOSI = "S0018_SENDTBL SELECT"             '
+            CS0054LOGWrite_bat.NIWEA = "A"                                  '
+            CS0054LOGWrite_bat.TEXT = ex.ToString
+            CS0054LOGWrite_bat.MESSAGENO = "00003"                          'DBエラー
+            CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+            Environment.Exit(100)
+        End Try
+
+    End Sub
+
+    '-------------------------------------------------------------------------
+    'テーブル情報取得
+    '  概要
+    '       指定されたテーブルのカラム名、属性を取得しカラム一覧（配列）を作成する
+    '
+    '　引数
+    '     　(IN ）iTblID     : テーブル名
+    '     　(OUT）oField     : カラム名
+    '     　(OUT）oType      : 属性
+    '-------------------------------------------------------------------------
+    Private Sub GetTblInfo(ByVal iTblID As String, ByRef oField As Object, ByRef oType As Object)
+        Dim CS0054LOGWrite_bat As New BATDLL.BATDLL.CS0054LOGWrite_bat    'LogOutput DirString Get
+
+        Try
+            'DataBase接続文字
+            Dim SQLcon As New SqlConnection(WW_DBcon)
+            SQLcon.Open() 'DataBase接続(Open)
+
+            'SQL Serverのテーブル名検索SQL文
+            Dim SQL_Str As String = _
+                " SELECT B.name as 'Table名', A.name as 'カラム名', C.name as 'データ型' " & _
+                " FROM sys.columns A " & _
+                " Left OUTER JOIN sys.objects B " & _
+                "   ON  A.object_id  = B.object_id " & _
+                " Left OUTER JOIN sys.types C " & _
+                "   ON  A.system_type_id = C.system_type_id " & _
+                " WHERE B.type       = 'U' " & _
+                "   and B.name       = @P1 " & _
+                "   and C.name      != 'sysname' " & _
+                " ORDER BY B.name,A.column_id "
+            Dim SQLcmd As New SqlCommand(SQL_Str, SQLcon)
+            Dim PARA1 As SqlParameter = SQLcmd.Parameters.Add("@P1", System.Data.SqlDbType.Char, 20)
+            PARA1.Value = iTblID
+            Dim SQLdr As SqlDataReader = SQLcmd.ExecuteReader()
+            oField.clear()
+            oType.clear()
+
+            While SQLdr.Read
+                oField.Add(SQLdr("カラム名"))
+                oType.Add(SQLdr("データ型"))
+            End While
+
+            'Close
+            SQLdr.Close() 'Reader(Close)
+            SQLdr = Nothing
+
+            SQLcmd.Dispose()
+            SQLcmd = Nothing
+
+            SQLcon.Close() 'DataBase接続(Close)
+            SQLcon.Dispose()
+            SQLcon = Nothing
+
+        Catch ex As Exception
+            CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+            CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+            CS0054LOGWrite_bat.INFSUBCLASS = "GetTblInfo"                   'SUBクラス名
+            CS0054LOGWrite_bat.INFPOSI = "sys.columns SELECT"               '
+            CS0054LOGWrite_bat.NIWEA = "A"                                  '
+            CS0054LOGWrite_bat.TEXT = ex.ToString
+            CS0054LOGWrite_bat.MESSAGENO = "00003"                          'DBエラー
+            CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+            Environment.Exit(100)
+        End Try
+
+        'テーブルがDB定義に存在しなければエラー
+        If oField.Count <= 0 Then
+            CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+            CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+            CS0054LOGWrite_bat.INFSUBCLASS = "GetTblInfo"                   'SUBクラス名
+            CS0054LOGWrite_bat.INFPOSI = "sys.columns SELECT"               '
+            CS0054LOGWrite_bat.NIWEA = "E"                                  '
+            CS0054LOGWrite_bat.TEXT = "テーブル： " & iTblID & " が存在しません。"
+            CS0054LOGWrite_bat.MESSAGENO = "00001"                          'パラメータエラー
+            CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+            Environment.Exit(100)
+        End If
+
+    End Sub
+
+    '-------------------------------------------------------------------------
+    '前回配信日時取得
+    '  概要
+    '       配信日時テーブルより前回配信日時を取得する
+    '
+    '　引数
+    '     　(OUT）oLastTime      : 前回送信日時
+    '-------------------------------------------------------------------------
+    Private Sub GetSendYMD(ByRef oLastTime As DateTime)
+        Dim CS0054LOGWrite_bat As New BATDLL.BATDLL.CS0054LOGWrite_bat    'LogOutput DirString Get
+
+        Try
+            'DataBase接続文字
+            Dim SQLcon As New SqlConnection(WW_DBcon)
+            SQLcon.Open() 'DataBase接続(Open)
+
+            'SQL Serverのテーブル名検索SQL文
+            Dim SQL_Str As String = _
+                " SELECT DATEADD(MINUTE, ADDMINUTES, LASTTIME) as LASTTIME " & _
+                " FROM S0017_SENDYMD " & _
+                " WHERE TERMID       = '" & WW_SRVname & "' " & _
+                " AND   DELFLG       <> '1' "
+            Dim SQLcmd As New SqlCommand(SQL_Str, SQLcon)
+            Dim SQLdr As SqlDataReader = SQLcmd.ExecuteReader()
+
+            While SQLdr.Read
+                oLastTime = SQLdr("LASTTIME")
+            End While
+            If SQLdr.HasRows = False Then
+                CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+                CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+                CS0054LOGWrite_bat.INFSUBCLASS = "GetSendYMD"                   'SUBクラス名
+                CS0054LOGWrite_bat.INFPOSI = "S0017_SENDYMD SELECT"             '
+                CS0054LOGWrite_bat.NIWEA = "E"                                  '
+                CS0054LOGWrite_bat.TEXT = "配信日時(S0017_SENDYMD)に端末ID=" & WW_SRVname & "が存在しません。"
+                CS0054LOGWrite_bat.MESSAGENO = "00003"                          'パラメータエラー
+                CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+                Environment.Exit(100)
+            End If
+
+            'Close
+            SQLdr.Close() 'Reader(Close)
+            SQLdr = Nothing
+
+            SQLcmd.Dispose()
+            SQLcmd = Nothing
+
+            SQLcon.Close() 'DataBase接続(Close)
+            SQLcon.Dispose()
+            SQLcon = Nothing
+
+        Catch ex As Exception
+            CS0054LOGWrite_bat.INFNMSPACE = "CB00005TBLselect"              'NameSpace
+            CS0054LOGWrite_bat.INFCLASS = "Main"                            'クラス名
+            CS0054LOGWrite_bat.INFSUBCLASS = "GetSendYMD"                   'SUBクラス名
+            CS0054LOGWrite_bat.INFPOSI = "S0017_SENDYMD SELECT"             '
+            CS0054LOGWrite_bat.NIWEA = "A"                                  '
+            CS0054LOGWrite_bat.TEXT = ex.ToString
+            CS0054LOGWrite_bat.MESSAGENO = "00003"                          'DBエラー
+            CS0054LOGWrite_bat.CS0054LOGWrite_bat()                         'ログ出力
+            Environment.Exit(100)
+        End Try
+
+    End Sub
+
+End Module
