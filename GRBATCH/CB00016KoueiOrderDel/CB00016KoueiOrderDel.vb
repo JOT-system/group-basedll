@@ -193,13 +193,13 @@ Module CB00016KoueiOrderDel
                        Optional ByVal messageText As String = "",
                        <System.Runtime.CompilerServices.CallerMemberName> Optional callerMemberName As String = Nothing)
         Dim clsLOGWrite As New BATDLL.CS0054LOGWrite_bat With {
-            .INFNMSPACE = "CB00015KoueiMaster",
+            .INFNMSPACE = "CB00016KoueiOrderDel",
             .INFCLASS = callerMemberName,
             .INFSUBCLASS = callerMemberName,
             .INFPOSI = callerMemberName,
-            .niwea = niwea,
-            .Text = messageText,
-            .messageNo = messageNo
+            .NIWEA = niwea,
+            .TEXT = messageText,
+            .MESSAGENO = messageNo
         }
         clsLOGWrite.CS0054LOGWrite_bat()
     End Sub
