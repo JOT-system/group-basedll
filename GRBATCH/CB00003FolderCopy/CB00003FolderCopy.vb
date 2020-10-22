@@ -82,8 +82,8 @@ Module CB00003FolderCopy
 					End Try
 					Console.WriteLine("引数(世代　　　　)：" & InPARA_Gener)
 				Case 4     'Copyサイクル(D:日単位、M:月単位、Y:年単位) 
-					InPARA_Cycle = Mid(cmd, 1, 100)
-					Console.WriteLine("引数(サイクル　　)：" & InPARA_Cycle)
+                    InPARA_Cycle = Mid(cmd, 2, 100)
+                    Console.WriteLine("引数(サイクル　　)：" & InPARA_Cycle)
 			End Select
 
 			WW_cmds_cnt = WW_cmds_cnt + 1
