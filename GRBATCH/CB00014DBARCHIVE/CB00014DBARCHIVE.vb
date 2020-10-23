@@ -616,12 +616,12 @@ Module CB00014DBARCHIVE
 
                 '圧縮ディレクトリ作成（圧縮対象ファイルが存在する場合）
                 wDirYM = WW_JNLdir & "\" & wZenYM
-                If wSelFiles.Count > 0 Then
-                    If System.IO.Directory.Exists(wDirYM) Then
-                    Else
-                        System.IO.Directory.CreateDirectory(wDirYM)
-                    End If
+                'If wSelFiles.Count > 0 Then
+                If System.IO.Directory.Exists(wDirYM) Then
+                Else
+                    System.IO.Directory.CreateDirectory(wDirYM)
                 End If
+                'End If
 
                 '圧縮ディレクトリにファイルを移動
                 For i As Integer = 0 To wSelFiles.Count - 1
@@ -649,7 +649,7 @@ Module CB00014DBARCHIVE
             CS0054LOGWrite_bat.TEXT = ex.ToString
             CS0054LOGWrite_bat.MESSAGENO = "00009"                           'Fileエラー
             CS0054LOGWrite_bat.CS0054LOGWrite_bat()                          'ログ入力
-            Exit Sub
+            'Exit Sub
         End Try
 
         '○ オンライン開始
