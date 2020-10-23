@@ -616,12 +616,12 @@ Module CB00014DBARCHIVE
 
                 '圧縮ディレクトリ作成（圧縮対象ファイルが存在する場合）
                 wDirYM = WW_JNLdir & "\" & wZenYM
-                'If wSelFiles.Count > 0 Then
-                If System.IO.Directory.Exists(wDirYM) Then
-                Else
-                    System.IO.Directory.CreateDirectory(wDirYM)
+                If wSelFiles.Count > 0 Then
+                    If System.IO.Directory.Exists(wDirYM) Then
+                    Else
+                        System.IO.Directory.CreateDirectory(wDirYM)
+                    End If
                 End If
-                'End If
 
                 '圧縮ディレクトリにファイルを移動
                 For i As Integer = 0 To wSelFiles.Count - 1
@@ -632,10 +632,9 @@ Module CB00014DBARCHIVE
                 Next
 
                 'ZIPファイル作成
-                ZipFile.CreateFromDirectory(wDirYM, wZipFile)
-
                 '圧縮成功の場合、フォルダー削除
                 If System.IO.Directory.Exists(wDirYM) Then
+                    ZipFile.CreateFromDirectory(wDirYM, wZipFile)
                     System.IO.Directory.Delete(wDirYM, True)
                 End If
             End If
