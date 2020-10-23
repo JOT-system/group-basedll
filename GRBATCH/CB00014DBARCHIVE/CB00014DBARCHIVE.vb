@@ -632,9 +632,12 @@ Module CB00014DBARCHIVE
                 Next
 
                 'ZIPファイル作成
+                If wSelFiles.Count > 0 Then
+                    ZipFile.CreateFromDirectory(wDirYM, wZipFile)
+                End If
+
                 '圧縮成功の場合、フォルダー削除
                 If System.IO.Directory.Exists(wDirYM) Then
-                    ZipFile.CreateFromDirectory(wDirYM, wZipFile)
                     System.IO.Directory.Delete(wDirYM, True)
                 End If
             End If
